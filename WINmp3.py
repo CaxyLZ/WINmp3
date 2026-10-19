@@ -300,14 +300,30 @@ class PlaylistDialog(BasePopup):
             playlists.pop(idx); save_json(LIST_PATH, playlists); self.refresh_list()
 
     def add_new(self):
-        folder = QFileDialog.getExistingDirectory(self, "选择音乐文件夹")
-        self.close()
-        if not folder: return
-        base_name = os.path.basename(folder) or "未命名"
+        self.main_win.is_dialog_open = True
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择音乐文件 (自动导入所在文件夹)", "", 
+            "Audio Files (*.mp3 *.wav *.flac *.m4a *.aac *.ogg);;All Files (*)"
+        )
+        self.main_win.is_dialog_open = False
+        
+        if not file_path: return
+        
+        folder = str(Path(file_path).parent)
+        
+        try:
+            self.close()
+        except RuntimeError:
+            pass
+            
+        base_name = Path(folder).name or "未命名"
         name = base_name; counter = 1
         while any(pl["name"] == name for pl in playlists):
             name = f"{base_name}{counter}"; counter += 1
-        playlists.append({"name": name, "path": folder}); save_json(LIST_PATH, playlists); self.main_win.load_folder(folder)
+            
+        playlists.append({"name": name, "path": folder})
+        save_json(LIST_PATH, playlists)
+        self.main_win.load_folder(folder)
 
 class VolumeDialog(BasePopup):
     def __init__(self, main_win):
@@ -530,6 +546,7 @@ class MusicPlayerWindow(QWidget):
         self.is_showing, self.is_animating, self.start_time = False, False, 0
         self.edge_state, self.drag_offset = "none", None
         self.lvl2_popup, self.lvl3_popup = None, None
+        self.is_dialog_open = False
 
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
@@ -694,7 +711,8 @@ class MusicPlayerWindow(QWidget):
         if self.is_minimized: self.toggle_minimize()
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.ApplicationDeactivate: self.close_all_popups()
+        if event.type() == QEvent.ApplicationDeactivate and not self.is_dialog_open:
+            self.close_all_popups()
         elif event.type() == QEvent.MouseButtonPress:
             if self.lvl2_popup or self.lvl3_popup:
                 pos = event.globalPosition().toPoint()
